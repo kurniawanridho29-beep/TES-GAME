@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Game Tebak Gambar - Template Guru (Single File)</title>
+  <style>
+    :root{--bg:#0f1724;--card:#0b1220;--accent:#06b6d4;--muted:#9ca3af;--glass:rgba(255,255,255,0.04)}
+    *{box-sizing:border-box;font-family:Inter,ui-sans-serif,system-ui,Segoe UI,Roboto,'Helvetica Neue',Arial}
+    body{margin:0;background:linear-gradient(180deg,#071029 0%, #071827 100%);color:#e6eef6;min-height:100vh;display:flex;align-items:flex-start;padding:28px}
+    .app{width:1100px;margin:0 auto}
+    header{display:flex;gap:12px;align-items:center;margin-bottom:18px}
+    header h1{font-size:20px;margin:0}
+    header p{margin:0;color:var(--muted)}
+    .layout{display:grid;grid-template-columns:420px 1fr;gap:18px}
+    .panel{background:var(--card);padding:14px;border-radius:12px;box-shadow:0 6px 20px rgba(2,6,23,0.6)}
+
+    /* left panel - slide editor */
+    .slides-list{display:flex;flex-direction:column;gap:10px}
+    .slide-item{display:flex;gap:10px;align-items:center;padding:8px;border-radius:8px;background:var(--glass)}
+    .slide-item input[type=text]{flex:1;padding:6px;border-radius:6px;border:1px solid rgba(255,255,255,0.05);background:transparent;color:inherit}
+    .slide-item label{font-size:12px;color:var(--muted)}
+    .controls{display:flex;gap:8px;margin-top:10px}
+    button{background:var(--accent);color:#042022;padding:8px 10px;border-radius:8px;border:none;cursor:pointer}
+    button.ghost{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--muted)}
+
+    /* right panel - preview/game */
+    .preview{display:flex;flex-direction:column;gap:12px}
+    .image-area{background:linear-gradient(180deg,rgba(255,255,255,0.02),transparent);border-radius:10px;padding:12px;display:flex;gap:12px}
+    .img-wrap{width:520px;height:360px;background:#04121b;border-radius:8px;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center}
+    .img-wrap img{max-width:100%;max-height:100%;display:block}
+    .crop-rect{position:absolute;border:2px dashed rgba(255,255,255,0.6);cursor:move}
+    .clue{width:200px;height:120px;background:#02131a;border-radius:8px;padding:6px;display:flex;align-items:center;justify-content:center}
+    .clue canvas{max-width:100%;max-height:100%;}
+
+    .play-controls{display:flex;gap:8px;align-items:center}
+    .answer-row{display:flex;gap:8px;align-items:center}
+    input.text{padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:inherit;min-width:300px}
+    .status{font-size:14px;color:var(--muted)}
+
+    footer.small{margin-top:10px;font-size:12px;color:var(--muted)}
+
+    /* responsive */
+    @media (max-width:1150px){.app{width:95vw}}
+    @media (max-width:900px){body{padding:12px}.layout{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div>
+        <h1>Game Tebak Gambar — Template Guru</h1>
+        <p>Unggah gambar per slide, tarik area sebagai clue (mata/telinga/dll). Jawab benar → muncul gambar utuh.</p>
+      </div>
+      <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+        <button id="exportBtn" class="ghost">Export JSON</button>
+        <button id="loadBtn" class="ghost">Load JSON</button>
+        <input id="fileJson" type="file" accept="application/json" style="display:none" />
+      </div>
+    </header>
+
+    <div class="layout">
+      <aside class="panel">
+        <h3>Slide Editor (maks 10)</h3>
+        <div class="slides-list" id="slidesList"></div>
+
+        <div class="controls">
+          <button id="addSlide">Tambah Slide</button>
+          <button id="removeSlide" class="ghost">Hapus Slide</button>
+        </div>
+
+        <hr style="margin:12px 0;border:none;border-top:1px solid rgba(255,255,255,0.03)"/>
+
+        <div>
+          <label class="label">Petunjuk cepat:</label>
+          <ol style="color:var(--muted);padding-left:18px;margin-top:6px">
+            <li>Tambahkan slide (maks 10).</li>
+            <li>Unggah gambar, lalu pilih area crop dengan klik-dan-seret di preview kanan.</li>
+            <li>Tulis jawaban (kata/kalimat). Saat pemain menjawab benar, gambar penuh akan muncul.</li>
+            <li>Gunakan Export/Load untuk menyimpan atau memuat template (.json).</li>
+          </ol>
+        </div>
+      </aside>
+
+      <main class="panel preview">
+        <div class="image-area">
+          <div class="img-wrap" id="imgWrap">
+            <canvas id="fullCanvas" width="520" height="360"></canvas>
+            <div id="placeholder" style="position:absolute;color:var(--muted);text-align:center;padding:12px">Tidak ada gambar. Unggah dari panel kiri.</div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:8px;width:220px">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <strong>Clue (potongan)</strong>
+              <button id="resetCrop" class="ghost">Reset crop</button>
+            </div>
+            <div class="clue"><canvas id="clueCanvas" width="200" height="120"></canvas></div>
+
+            <div style="margin-top:6px">
+              <label class="label">Mode tampilan:</label>
+              <div style="display:flex;gap:8px;margin-top:6px">
+                <button id="showClueOnly" class="ghost">Clue only</button>
+                <button id="showFullOnCorrect">Tampil penuh jika benar</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="play-controls">
+          <div style="flex:1">
+            <div class="answer-row">
+              <input id="answerInput" class="text" placeholder="Masukkan jawaban di sini..." />
+              <button id="submitAnswer">Cek</button>
+              <button id="skipReveal" class="ghost">Buka paksa (guru)</button>
+            </div>
+            <div class="status" id="statusText">Slide 0 / 0 — Belum dimulai</div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end">
+            <div style="display:flex;gap:8px">
+              <button id="prevBtn" class="ghost">Sebelumnya</button>
+              <button id="nextBtn" class="ghost">Berikutnya</button>
+            </div>
+            <div class="small">Tips: Tekan Enter untuk submit jawaban.</div>
+          </div>
+        </div>
+
+        <footer class="small">File ini: single HTML. Silakan simpan lalu buka di browser. Untuk distribusi: edit gambar/jawaban lalu Export JSON.</footer>
+      </main>
+    </div>
+  </div>
+
+  <script>
+    // State
+    const MAX_SLIDES = 10;
+    let slides = [];
+    let current = 0;
+
+    // DOM
+    const slidesList = document.getElementById('slidesList');
+    const addSlideBtn = document.getElementById('addSlide');
+    const removeSlideBtn = document.getElementById('removeSlide');
+    const fullCanvas = document.getElementById('fullCanvas');
+    const fc = fullCanvas.getContext('2d');
+    const placeholder = document.getElementById('placeholder');
+    const clueCanvas = document.getElementById('clueCanvas');
+    const cc = clueCanvas.getContext('2d');
+    const imgWrap = document.getElementById('imgWrap');
+    const answerInput = document.getElementById('answerInput');
+    const submitAnswer = document.getElementById('submitAnswer');
+    const statusText = document.getElementById('statusText');
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    const resetCrop = document.getElementById('resetCrop');
+    const skipReveal = document.getElementById('skipReveal');
+    const exportBtn = document.getElementById('exportBtn');
+    const loadBtn = document.getElementById('loadBtn');
+    const fileJson = document.getElementById('fileJson');
+
+    // Crop UI vars
+    let img = new Image();
+    let imgLoaded = false;
+    let rect = null; // {x,y,w,h} in canvas coords
+    let dragging = false;
+    let dragOffset = {x:0,y:0};
+
+    // Initialize with 3 sample slides
+    function init(){
+      for(let i=0;i<3;i++) addSlide();
+      renderSlidesList();
+      goToSlide(0);
+    }
+
+    // Slide model: {title,answer,imageDataURL,crop:{x,y,w,h},revealed:boolean}
+    function addSlide(){
+      if(slides.length >= MAX_SLIDES) return alert('Maksimum '+MAX_SLIDES+' slide');
+      slides.push({title:'Slide '+(slides.length+1),answer:'',imageDataURL:null,crop:null,revealed:false});
+      renderSlidesList();
+    }
+    addSlideBtn.onclick = addSlide;
+
+    function removeSlide(){
+      if(slides.length===0) return;
+      slides.splice(current,1);
+      if(current>slides.length-1) current = slides.length-1;
+      renderSlidesList();
+      goToSlide(Math.max(0,current));
+    }
+    removeSlideBtn.onclick = removeSlide;
+
+    function renderSlidesList(){
+      slidesList.innerHTML='';
+      slides.forEach((s,i)=>{
+        const item = document.createElement('div'); item.className='slide-item';
+        const idx = document.createElement('div'); idx.textContent = (i+1); idx.style.width='26px';
+        const title = document.createElement('input'); title.type='text'; title.value = s.title;
+        title.oninput = e=>{s.title = e.target.value}
+        const file = document.createElement('input'); file.type='file'; file.accept='image/*'; file.style.width='120px';
+        file.onchange = e=>handleImageUpload(e,i);
+        const ans = document.createElement('input'); ans.type='text'; ans.placeholder='Jawaban'; ans.value = s.answer; ans.style.width='120px';
+        ans.oninput = e=>{s.answer = e.target.value}
+
+        item.appendChild(idx); item.appendChild(title); item.appendChild(file); item.appendChild(ans);
+        item.onclick = ()=>{goToSlide(i)};
+        slidesList.appendChild(item);
+      });
+      statusText.textContent = `Slide ${current+1} / ${slides.length}`;
+    }
+
+    function handleImageUpload(e,idx){
+      const f = e.target.files[0];
+      if(!f) return;
+      const reader = new FileReader();
+      reader.onload = ev=>{
+        slides[idx].imageDataURL = ev.target.result;
+        slides[idx].crop = null; slides[idx].revealed = false;
+        if(idx===current) loadImageToCanvas(slides[idx].imageDataURL);
+        renderSlidesList();
+      }
+      reader.readAsDataURL(f);
+    }
+
+    // Load image into fullCanvas and set up crop UI
+    function loadImageToCanvas(dataURL){
+      img = new Image(); img.onload = ()=>{
+        imgLoaded = true; placeholder.style.display='none';
+        // draw scaled to canvas
+        const cw = fullCanvas.width, ch = fullCanvas.height;
+        fc.clearRect(0,0,cw,ch);
+        // keep aspect fit
+        const scale = Math.min(cw/img.width, ch/img.height);
+        const iw = img.width*scale, ih = img.height*scale;
+        const ox = (cw-iw)/2, oy = (ch-ih)/2;
+        fc.drawImage(img,0,0,img.width,img.height,ox,oy,iw,ih);
+        // store transform to map mouse coords back
+        img._meta = {ox,oy,iw,ih,scale};
+        // if there was crop in model, restore rect
+        const s = slides[current];
+        if(s.crop){ rect = Object.assign({}, s.crop); }
+        else{ rect = {x:ox+iw*0.6,y:oy+ih*0.25,w:iw*0.18,h:ih*0.18} }
+        drawCropRect(); drawClue();
+      }
+      img.src = dataURL;
+    }
+
+    function goToSlide(i){
+      if(i<0 || i>=slides.length) return;
+      saveCurrentSlideState();
+      current = i; renderSlidesList();
+      const s = slides[current];
+      answerInput.value='';
+      if(s.imageDataURL){ loadImageToCanvas(s.imageDataURL); }
+      else{ imgLoaded=false; placeholder.style.display='block'; fc.clearRect(0,0,fullCanvas.width,fullCanvas.height); cc.clearRect(0,0,clueCanvas.width,clueCanvas.height); rect=null }
+      statusText.textContent = `Slide ${current+1} / ${slides.length} — ${s.revealed? 'Terbuka' : 'Tertutup'}`;
+    }
+
+    function saveCurrentSlideState(){
+      if(!slides[current]) return;
+      slides[current].crop = rect?Object.assign({},rect):null;
+    }
+
+    prevBtn.onclick = ()=>{ if(current>0) goToSlide(current-1) }
+    nextBtn.onclick = ()=>{ if(current<slides.length-1) goToSlide(current+1) }
+
+    // Canvas mouse events for drawing/moving crop rect
+    let start = null;
+    imgWrap.addEventListener('mousedown', (ev)=>{
+      if(!imgLoaded) return;
+      const r = imgWrap.getBoundingClientRect();
+      const x = ev.clientX - r.left, y = ev.clientY - r.top;
+      // if rect exists and click inside -> begin drag
+      if(rect && x>=rect.x && x<=rect.x+rect.w && y>=rect.y && y<=rect.y+rect.h){
+        dragging = true; dragOffset.x = x-rect.x; dragOffset.y = y-rect.y; return;
+      }
+      // else start new rect
+      start = {x,y}; rect = {x,y,w:1,h:1}; drawCropRect();
+    });
+    window.addEventListener('mousemove',(ev)=>{
+      if(!imgLoaded) return;
+      const r = imgWrap.getBoundingClientRect();
+      const x = ev.clientX - r.left, y = ev.clientY - r.top;
+      if(start){ rect.w = Math.max(8, x-start.x); rect.h = Math.max(8, y-start.y); return drawCropRect(); }
+      if(dragging){ rect.x = x - dragOffset.x; rect.y = y - dragOffset.y; constrainRect(); drawCropRect(); }
+    });
+    window.addEventListener('mouseup',()=>{ start=null; dragging=false; saveCurrentSlideState(); drawClue(); });
+
+    function constrainRect(){
+      const cw = fullCanvas.width, ch = fullCanvas.height;
+      rect.x = Math.max(0, Math.min(rect.x, cw-8)); rect.y = Math.max(0, Math.min(rect.y, ch-8));
+      rect.w = Math.max(8, Math.min(rect.w, cw-rect.x)); rect.h = Math.max(8, Math.min(rect.h, ch-rect.y));
+    }
+
+    function drawCropRect(){
+      // redraw image then rect overlay
+      if(!imgLoaded) return;
+      const cw = fullCanvas.width, ch = fullCanvas.height;
+      fc.clearRect(0,0,cw,ch);
+      const meta = img._meta; fc.drawImage(img,0,0,img.width,img.height,meta.ox,meta.oy,meta.iw,meta.ih);
+      if(!rect) return;
+      constrainRect();
+      // draw semi overlay
+      fc.save();
+      fc.fillStyle = 'rgba(0,0,0,0.45)';
+      fc.fillRect(0,0,cw,ch);
+      fc.clearRect(rect.x,rect.y,rect.w,rect.h);
+      fc.strokeStyle = 'rgba(255,255,255,0.8)'; fc.lineWidth = 2; fc.setLineDash([6,6]);
+      fc.strokeRect(rect.x,rect.y,rect.w,rect.h);
+      fc.restore();
+    }
+
+    function drawClue(){
+      cc.clearRect(0,0,clueCanvas.width,clueCanvas.height);
+      if(!imgLoaded || !rect) return;
+      // map rect back to original image coordinates using meta
+      const meta = img._meta;
+      // inverse map: rect.x => (rect.x - ox)/iw * img.width
+      const sx = (rect.x - meta.ox)/meta.iw * img.width;
+      const sy = (rect.y - meta.oy)/meta.ih * img.height;
+      const sw = rect.w / meta.iw * img.width;
+      const sh = rect.h / meta.ih * img.height;
+      // draw to clue canvas scaled to fill
+      cc.drawImage(img, sx, sy, sw, sh, 0, 0, clueCanvas.width, clueCanvas.height);
+    }
+
+    // Answer checking
+    function normalizeText(t){ return t.trim().toLowerCase().replace(/[\s]+/g,' '); }
+    submitAnswer.onclick = checkAnswer;
+    answerInput.addEventListener('keydown',(e)=>{ if(e.key==='Enter') checkAnswer(); });
+
+    function checkAnswer(){
+      const s = slides[current];
+      if(!s || !s.answer){ alert('Belum ada jawaban untuk slide ini (isi di panel kiri).'); return; }
+      const given = normalizeText(answerInput.value);
+      const correct = normalizeText(s.answer);
+      if(given===correct){
+        s.revealed = true; statusText.textContent = `Benar! Gambar dibuka.`; revealFullImage();
+      } else {
+        statusText.textContent = `Salah. Coba lagi.`;
+      }
+    }
+
+    function revealFullImage(){
+      if(!imgLoaded) return;
+      // redraw full image
+      const meta = img._meta; fc.clearRect(0,0,fullCanvas.width,fullCanvas.height);
+      fc.drawImage(img,0,0,img.width,img.height,meta.ox,meta.oy,meta.iw,meta.ih);
+      // clear clue overlay
+      cc.clearRect(0,0,clueCanvas.width,clueCanvas.height);
+      statusText.textContent = `Slide ${current+1} / ${slides.length} — Terbuka`;
+    }
+
+    resetCrop.onclick = ()=>{ if(!imgLoaded) return; const m = img._meta; rect = {x:m.ox + m.iw*0.45, y:m.oy + m.ih*0.25, w:m.iw*0.12, h:m.ih*0.12}; drawCropRect(); drawClue(); }
+    skipReveal.onclick = ()=>{ if(!confirm('Buka paksa gambar penuh untuk slide ini?')) return; slides[current].revealed=true; revealFullImage(); }
+
+    // Export / Load JSON
+    exportBtn.onclick = ()=>{
+      saveCurrentSlideState();
+      const data = JSON.stringify({slides},null,2);
+      const blob = new Blob([data],{type:'application/json'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = 'tebak-gambar-template.json'; a.click();
+      URL.revokeObjectURL(url);
+    }
+    loadBtn.onclick = ()=>fileJson.click();
+    fileJson.onchange = e=>{
+      const f = e.target.files[0]; if(!f) return;
+      const reader = new FileReader(); reader.onload = ev=>{
+        try{ const obj = JSON.parse(ev.target.result); if(obj.slides) { slides = obj.slides.slice(0,MAX_SLIDES); current=0; renderSlidesList(); goToSlide(0); alert('Template dimuat.'); } else alert('File tidak valid.'); }
+        catch(err){ alert('Gagal memuat JSON: '+err.message) }
+      }
+      reader.readAsText(f);
+    }
+
+    // Save state when leaving page
+    window.addEventListener('beforeunload', ()=>{ saveCurrentSlideState(); });
+
+    // Initialize
+    init();
+  </script>
+</body>
+</html>
